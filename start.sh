@@ -3,15 +3,29 @@ set -e
 
 echo "🚀 Starting Bitcoin Live Pro..."
 
-# Install backend dependencies
+######################################
+# 1) BACKEND
+######################################
+echo "📦 Installing backend dependencies..."
 cd backend
-npm install
-npm run start &
-echo "✅ Backend running"
+npm install --force
 
-# Install frontend dependencies
+echo "▶️ Starting backend..."
+npm start &
+BACKEND_PID=$!
+echo "✅ Backend running on PID $BACKEND_PID"
+
+######################################
+# 2) FRONTEND
+######################################
+echo "📦 Installing frontend dependencies..."
 cd ../frontend
-npm install
+npm install --force
+
+echo "🏗 Building frontend..."
 npm run build
-npx serve dist -l 4173
-echo "🌐 Frontend running"
+
+echo "🌐 Starting frontend server..."
+# Railway does NOT have "serve" installed globally → use local version
+npx serve -s dist -l 4173
+

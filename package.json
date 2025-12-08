@@ -1,0 +1,11 @@
+{
+  "name": "bitcoin-live-pro",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "start": "sh start.sh"
+  }
+}
