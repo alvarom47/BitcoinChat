@@ -1,11 +1,12 @@
 {
   "name": "bitcoin-live-pro",
+  "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "backend",
-    "frontend"
-  ],
   "scripts": {
-    "start": "sh start.sh"
+    "start": "bash start.sh"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
+
