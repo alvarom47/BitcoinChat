@@ -1,4 +1,4 @@
-# ---------- FRONTEND BUILD STAGE ----------
+# ---------- FRONTEND BUILD ----------
 FROM node:18-alpine AS frontend
 
 WORKDIR /app/frontend
@@ -7,9 +7,16 @@ COPY frontend/package*.json ./
 RUN npm install
 
 COPY frontend ./
-RUN npx vite build
 
-# ---------- BACKEND BUILD STAGE ----------
+# Fix Vite execution permissions
+RUN chmod +x node_modules/.bin/vite || true
+RUN chmod +x node_modules/vite/bin/vite.js || true
+
+# Build frontend
+RUN npx --yes vite build
+
+
+# ---------- BACKEND BUILD ----------
 FROM node:18-alpine AS backend
 
 WORKDIR /app/backend
@@ -19,7 +26,8 @@ RUN npm install
 
 COPY backend ./
 
-# ---------- FINAL RUNTIME IMAGE ----------
+
+# ---------- FINAL RUNTIME ----------
 FROM node:18-alpine
 
 WORKDIR /app
@@ -27,16 +35,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# Copiar backend listo
 COPY --from=backend /app/backend ./backend
-
-# Copiar frontend compilado
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 
-# Instalar algún servidor estático para servir el frontend
 RUN npm install -g serve
 
 EXPOSE 8080
 
 CMD ["sh", "-c", "node backend/src/server.js & serve -s frontend/dist -l 8080"]
+
 
