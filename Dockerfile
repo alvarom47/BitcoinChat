@@ -1,5 +1,9 @@
+# ---------- BASE IMAGE ----------
+FROM node:18 AS base
+WORKDIR /app
+
 # ---------- FRONTEND BUILD ----------
-FROM node:18-alpine AS frontend
+FROM base AS frontend
 
 WORKDIR /app/frontend
 
@@ -7,11 +11,13 @@ COPY frontend/package*.json ./
 RUN npm install
 
 COPY frontend ./
-RUN npm run build
+
+# Build using NodeJS directly to avoid permission issues
+RUN node node_modules/vite/bin/vite.js build
 
 
 # ---------- BACKEND BUILD ----------
-FROM node:18-alpine AS backend
+FROM base AS backend
 
 WORKDIR /app/backend
 
@@ -22,7 +28,7 @@ COPY backend ./
 
 
 # ---------- FINAL RUNTIME ----------
-FROM node:18-alpine
+FROM node:18
 
 WORKDIR /app
 
@@ -32,14 +38,15 @@ ENV PORT=8080
 # Copy backend
 COPY --from=backend /app/backend ./backend
 
-# Copy frontend build
+# Copy frontend dist
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 
-# Install only what backend needs
-WORKDIR /app/backend
+# Install static server for frontend
+RUN npm install -g serve
 
 EXPOSE 8080
 
-CMD ["node", "src/server.js"]
+CMD ["sh", "-c", "node backend/src/server.js & serve -s frontend/dist -l 8080"]
+
 
 
