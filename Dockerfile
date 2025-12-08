@@ -1,32 +1,42 @@
-# ---------- Backend builder ----------
-FROM node:18-alpine AS backend
-WORKDIR /backend
-COPY backend/package*.json ./
-RUN npm install
-COPY backend .
-
-# ---------- Frontend builder ----------
+# ---------- FRONTEND BUILD STAGE ----------
 FROM node:18-alpine AS frontend
-WORKDIR /frontend
+
+WORKDIR /app/frontend
+
 COPY frontend/package*.json ./
 RUN npm install
-COPY frontend .
-RUN npx --yes vite build
 
-# ---------- Final runtime image ----------
-FROM node:18-alpine
-WORKDIR /app
+COPY frontend ./
+RUN npx vite build
 
-# Copy backend (server)
-COPY --from=backend /backend ./backend
-
-# Copy frontend build
-COPY --from=frontend /frontend/dist ./frontend-dist
+# ---------- BACKEND BUILD STAGE ----------
+FROM node:18-alpine AS backend
 
 WORKDIR /app/backend
-RUN npm install --omit=dev
 
+COPY backend/package*.json ./
+RUN npm install
+
+COPY backend ./
+
+# ---------- FINAL RUNTIME IMAGE ----------
+FROM node:18-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
 ENV PORT=8080
+
+# Copiar backend listo
+COPY --from=backend /app/backend ./backend
+
+# Copiar frontend compilado
+COPY --from=frontend /app/frontend/dist ./frontend/dist
+
+# Instalar algún servidor estático para servir el frontend
+RUN npm install -g serve
+
 EXPOSE 8080
 
-CMD ["node", "src/server.js"]
+CMD ["sh", "-c", "node backend/src/server.js & serve -s frontend/dist -l 8080"]
+
