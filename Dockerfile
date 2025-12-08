@@ -1,26 +1,26 @@
-# ----- Builder Backend -----
+# ---------- Backend builder ----------
 FROM node:18-alpine AS backend
 WORKDIR /backend
 COPY backend/package*.json ./
 RUN npm install
 COPY backend .
 
-# ----- Builder Frontend -----
+# ---------- Frontend builder ----------
 FROM node:18-alpine AS frontend
 WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend .
-RUN npx vite build
+RUN npx --yes vite build
 
-# ----- Final Image -----
+# ---------- Final runtime image ----------
 FROM node:18-alpine
 WORKDIR /app
 
-# Copy backend
+# Copy backend (server)
 COPY --from=backend /backend ./backend
 
-# Copy frontend build (dist folder)
+# Copy frontend build
 COPY --from=frontend /frontend/dist ./frontend-dist
 
 WORKDIR /app/backend
