@@ -1,33 +1,37 @@
-# ──────────────── ROOT DOCKERFILE FOR RAILWAY ────────────────
+# ---------- BASE IMAGE ----------
 FROM node:18-alpine AS builder
 
-# Install backend dependencies
-WORKDIR /app/backend
-COPY backend/package.json backend/package-lock.json ./
-RUN npm install
-COPY backend .
+WORKDIR /app
 
-# Install frontend dependencies + build
-WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm install
-COPY frontend .
-RUN npx vite build
+# ---------- BACKEND ----------
+COPY backend/package.json backend/package-lock.json ./backend/
+RUN cd backend && npm install
 
-# ──────────────── FINAL IMAGE ────────────────
+COPY backend ./backend
+
+
+# ---------- FRONTEND ----------
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+RUN cd frontend && npm install
+
+COPY frontend ./frontend
+RUN cd frontend && npx vite build
+
+
+# ---------- FINAL IMAGE ----------
 FROM node:18-alpine
-
 WORKDIR /app
 
 # Copy backend
 COPY --from=builder /app/backend ./backend
 
 # Copy frontend build output
-COPY --from=builder /app/frontend/dist ./frontend/dist
+COPY --from=builder /app/frontend/dist ./frontend-dist
 
 # Install serve for static hosting
 RUN npm install -g serve
 
+ENV PORT=8080
 EXPOSE 8080
 
-CMD node backend/src/server.js & serve -s frontend/dist -l 4173
+CMD ["sh", "-c", "cd backend && node src/server.js & serve ../frontend-dist -l 8080"]
