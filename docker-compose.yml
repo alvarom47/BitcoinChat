@@ -1,0 +1,18 @@
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "4000:4000"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/bitcoin_live
+    depends_on:
+      - mongo
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"

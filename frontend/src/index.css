@@ -1,0 +1,14 @@
+:root{--bg:#071022;--card:#081225;--accent:#ff9f1c;--muted:#9fb0c8;color-scheme: dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#e6eef8;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+.header{height:64px;display:flex;align-items:center;padding:0 20px;background:linear-gradient(90deg,#071022,#072033);border-bottom:1px solid rgba(255,255,255,0.02)}
+.container{display:flex;height:calc(100vh - 64px)}
+.left{flex:1;padding:18px;overflow:auto}
+.right{width:380px;border-left:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column}
+.card{background:var(--card);padding:12px;border-radius:10px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.02)}
+.tx-list{height:420px;overflow:auto}
+.chat{flex:1;display:flex;flex-direction:column;padding:12px}
+.chat-messages{flex:1;overflow:auto;margin-bottom:8px}
+.chat-input{display:flex;gap:8px}
+input,button,textarea{background:transparent;border:1px solid rgba(255,255,255,0.04);color:inherit;padding:8px;border-radius:8px}
+button{background:var(--accent);border:none;color:#081022;font-weight:700;padding:8px 12px}
