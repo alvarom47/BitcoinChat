@@ -7,13 +7,7 @@ COPY frontend/package*.json ./
 RUN npm install
 
 COPY frontend ./
-
-# Fix Vite execution permissions
-RUN chmod +x node_modules/.bin/vite || true
-RUN chmod +x node_modules/vite/bin/vite.js || true
-
-# Build frontend
-RUN npx --yes vite build
+RUN npm run build
 
 
 # ---------- BACKEND BUILD ----------
@@ -22,7 +16,7 @@ FROM node:18-alpine AS backend
 WORKDIR /app/backend
 
 COPY backend/package*.json ./
-RUN npm install
+RUN npm install --production
 
 COPY backend ./
 
@@ -35,12 +29,17 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
+# Copy backend
 COPY --from=backend /app/backend ./backend
+
+# Copy frontend build
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 
-RUN npm install -g serve
+# Install only what backend needs
+WORKDIR /app/backend
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "node backend/src/server.js & serve -s frontend/dist -l 8080"]
+CMD ["node", "src/server.js"]
+
 
