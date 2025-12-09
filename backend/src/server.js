@@ -1,4 +1,3 @@
-// server.js — Railway READY
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
@@ -14,50 +13,56 @@ const txsRouter = require("./routes/txs");
 const postsRouter = require("./routes/posts");
 
 const app = express();
+
+// --------------------- PORT FIX FOR RAILWAY ---------------------
+const BACKEND_PORT = process.env.BACKEND_PORT || 3001; // backend port (NOT 8080)
+// ----------------------------------------------------------------
+
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
 app.use(cors());
 app.use(bodyParser.json());
 
-// ---------- DATABASE ----------
+// --------------------- MONGO CONNECTION FIX ---------------------
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
-  console.error("❌ ERROR: MONGODB_URI is missing");
-  process.exit(1);
+  console.error("❌ ERROR: Missing MONGODB_URI in Railway Environment Variables");
+} else if (
+  !MONGODB_URI.startsWith("mongodb://") &&
+  !MONGODB_URI.startsWith("mongodb+srv://")
+) {
+  console.error("❌ Invalid MongoDB connection string format:", MONGODB_URI);
 }
 
-mongoose.set("strictQuery", false);
 mongoose
   .connect(MONGODB_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB error", err));
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB error:", err));
+// ----------------------------------------------------------------
 
-// ---------- API ----------
-app.get("/health", (_, res) =>
-  res.json({ ok: true, time: new Date().toISOString() })
+app.get("/health", (req, res) =>
+  res.json({ ok: true, backend: true, time: new Date().toISOString() })
 );
 
 app.use("/api/tx", txsRouter);
 app.use("/api/posts", postsRouter);
 
-// ---------- SERVER ----------
-const server = http.createServer(app);
-
-// Backend must NOT use 8080 in Railway — frontend uses that port.
-const PORT = process.env.BACKEND_PORT || 3001;
-
-// ---------- SOCKET.IO ----------
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
-});
-
+// ---------------------- SOCKET.IO ----------------------
 io.on("connection", (socket) => {
-  console.log("socket connected", socket.id);
+  console.log("🔌 Socket connected:", socket.id);
 
-  // Join live chat
   socket.on("join_live_chat", async ({ username }) => {
-    if (!username || username.trim().length < 2)
-      username = "anon_" + socket.id.slice(0, 6);
+    username =
+      username && username.trim().length > 1
+        ? username.trim()
+        : "anon_" + socket.id.slice(0, 6);
 
     socket.data.username = username;
     socket.join("live_chat");
@@ -69,36 +74,45 @@ io.on("connection", (socket) => {
     socket.emit("chat_history", recent.reverse());
   });
 
-  // Receive a message
   socket.on("live_chat_message", async ({ message }) => {
     if (!socket.data.username) return;
+
+    const now = Date.now();
+    socket.lastMsgAt = socket.lastMsgAt || 0;
+    if (now - socket.lastMsgAt < 400) {
+      socket.emit("rate_limited");
+      return;
+    }
+    socket.lastMsgAt = now;
 
     const sanitize = require("./utils/sanitize");
     const clean = sanitize(String(message || "").slice(0, 800));
 
-    const saved = await ChatMessage.create({
+    const m = await ChatMessage.create({
       username: socket.data.username,
       message: clean,
       createdAt: new Date(),
     });
 
-    io.to("live_chat").emit("new_chat_message", saved);
+    io.to("live_chat").emit("new_chat_message", m);
   });
 
-  socket.on("disconnect", () => {
-    console.log("socket disconnected", socket.id);
-  });
+  socket.on("disconnect", () =>
+    console.log("❌ Socket disconnected:", socket.id)
+  );
 });
+// --------------------------------------------------------
 
-// ---------- HYBRID TX STREAM ----------
+// Start hybrid mempool client and forward txs to all clients
 HybridTxClient.start((tx) => {
   io.emit("tx", tx);
 });
 
-// ---------- LISTEN ----------
-server.listen(PORT, "0.0.0.0", () =>
-  console.log("🚀 Backend running on port", PORT)
+// ---------------------- START SERVER ----------------------
+server.listen(BACKEND_PORT, () =>
+  console.log(`🚀 Backend running on port ${BACKEND_PORT}`)
 );
+
 
 
 

@@ -1,16 +1,15 @@
 import { io } from "socket.io-client";
 
-// ✔ En producción usa la variable del backend
-// ✔ En local usa http://localhost:4000
 const BACKEND =
   import.meta.env.VITE_BACKEND_URL ||
-  "http://localhost:4000";
+  window.location.origin.replace(/\/$/, "").replace("https://", "https://api."); 
+// Example: front → https://bitcoinchat.online
+// backend → https://api.bitcoinchat.online (recommended setup)
 
 console.log("🌐 Connecting to backend:", BACKEND);
 
 export const socket = io(BACKEND, {
-  transports: ["websocket", "polling"],
-  path: "/socket.io",
+  transports: ["websocket"],
   reconnection: true,
 });
 
