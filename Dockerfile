@@ -5,12 +5,21 @@ FROM node:18-alpine AS frontend
 
 WORKDIR /app/frontend
 
+# Ensure permission tools exist
+RUN apk update && apk add --no-cache bash
+
 COPY frontend/package*.json ./
 RUN npm install
 
+# Fix vite binary permissions BEFORE copying source
+RUN chmod -R 755 node_modules/.bin || true
+RUN chmod -R 755 node_modules/vite || true
+
+# Now copy source
 COPY frontend ./
 
-RUN npx vite build
+# Build frontend
+RUN npx --yes vite build
 
 
 # -----------------------------
@@ -39,15 +48,16 @@ ENV PORT=8080
 # Copy backend app
 COPY --from=backend /app/backend ./backend
 
-# Copy built frontend to /public
+# Copy built frontend
 COPY --from=frontend /app/frontend/dist ./public
 
-# Backend may need root package.json (if present)
+# Install only root dependencies if any
 COPY package.json ./
 RUN npm install --omit=dev || true
 
 EXPOSE 8080
 
 CMD ["node", "backend/src/server.js"]
+
 
 
