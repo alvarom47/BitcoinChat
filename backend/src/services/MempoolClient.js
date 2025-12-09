@@ -1,44 +1,41 @@
 // backend/src/services/MempoolClient.js
+
 const WebSocket = require("ws");
 
-class MempoolClient {
-  constructor(onTxCallback) {
-    this.onTxCallback = onTxCallback;
-    this.ws = null;
-    this.url = "wss://mempool.space/api/v1/ws";
-  }
+let ws = null;
 
-  start() {
-    console.log("[MEMPOOL] Connecting to mempool.space ws...");
+function start(onTx) {
+  const url = "wss://mempool.space/api/v1/ws";
 
-    this.ws = new WebSocket(this.url);
+  console.log("[MEMPOOL] Connecting to mempool.space ws...");
 
-    this.ws.on("open", () => {
-      console.log("[MEMPOOL] Connected! Subscribing to live transactions...");
-      this.ws.send(JSON.stringify({ action: "want", data: ["mempool-blocks", "transactions"] }));
-    });
+  ws = new WebSocket(url);
 
-    this.ws.on("message", (msg) => {
-      try {
-        const data = JSON.parse(msg.toString());
+  ws.on("open", () => {
+    console.log("[MEMPOOL] Connected! Subscribing to live transactions...");
+    ws.send(JSON.stringify({ action: "want", data: ["transactions"] }));
+  });
 
-        if (data?.transaction) {
-          this.onTxCallback(data.transaction);
-        }
-      } catch (e) {
-        console.error("[MEMPOOL] Message parse error:", e);
+  ws.on("message", (msg) => {
+    try {
+      const data = JSON.parse(msg);
+      if (data["transaction"]) {
+        onTx(data["transaction"]);
       }
-    });
+    } catch (err) {
+      console.error("[MEMPOOL] JSON parse error:", err);
+    }
+  });
 
-    this.ws.on("error", (err) => {
-      console.error("[MEMPOOL] WS Error:", err.message);
-    });
+  ws.on("close", () => {
+    console.log("[MEMPOOL] WS closed. Reconnecting in 3s...");
+    setTimeout(() => start(onTx), 3000);
+  });
 
-    this.ws.on("close", () => {
-      console.warn("[MEMPOOL] Disconnected. Reconnecting in 3s...");
-      setTimeout(() => this.start(), 3000);
-    });
-  }
+  ws.on("error", (err) => {
+    console.error("[MEMPOOL] WS error:", err);
+  });
 }
 
-module.exports = MempoolClient;
+module.exports = { start };
+
