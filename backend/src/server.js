@@ -1,77 +1,79 @@
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
-const { Server } = require("socket.io");
+const path = require("path");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const { Server } = require("socket.io");
 
-const HybridTxClient = require("./services/HybridTxClient");
 const ChatMessage = require("./models/ChatMessage");
-
 const txsRouter = require("./routes/txs");
 const postsRouter = require("./routes/posts");
 
+const MempoolClient = require("./services/MempoolClient");
+
 const app = express();
-
-// --------------------- PORT FIX FOR RAILWAY ---------------------
-const BACKEND_PORT = process.env.BACKEND_PORT || 3001; // backend port (NOT 8080)
-// ----------------------------------------------------------------
-
 const server = http.createServer(app);
 
+// Socket.IO
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: "*" },
 });
 
+// Middlewares
 app.use(cors());
 app.use(bodyParser.json());
 
-// --------------------- MONGO CONNECTION FIX ---------------------
-const MONGODB_URI = process.env.MONGODB_URI;
-if (!MONGODB_URI) {
-  console.error("❌ ERROR: Missing MONGODB_URI in Railway Environment Variables");
-} else if (
-  !MONGODB_URI.startsWith("mongodb://") &&
-  !MONGODB_URI.startsWith("mongodb+srv://")
-) {
-  console.error("❌ Invalid MongoDB connection string format:", MONGODB_URI);
-}
+// ------------------------------
+// MongoDB
+// ------------------------------
+const MONGO = process.env.MONGO_URL;
+
+console.log("🔌 Connecting to Mongo:", MONGO);
 
 mongoose
-  .connect(MONGODB_URI)
+  .connect(MONGO, { serverSelectionTimeoutMS: 30000 })
   .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.error("❌ MongoDB error:", err));
-// ----------------------------------------------------------------
+  .catch((err) => console.error("❌ MongoDB ERROR:", err));
 
-app.get("/health", (req, res) =>
-  res.json({ ok: true, backend: true, time: new Date().toISOString() })
-);
-
+// ------------------------------
+// API Routes
+// ------------------------------
 app.use("/api/tx", txsRouter);
 app.use("/api/posts", postsRouter);
 
-// ---------------------- SOCKET.IO ----------------------
-io.on("connection", (socket) => {
-  console.log("🔌 Socket connected:", socket.id);
+app.get("/health", (req, res) => {
+  res.json({ ok: true, time: new Date().toISOString() });
+});
+
+// ------------------------------
+// Serve React frontend (public folder)
+// ------------------------------
+app.use(express.static(path.join(__dirname, "../../public")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../../public/index.html"));
+});
+
+// ------------------------------
+// Socket.IO Events
+// ------------------------------
+io.on("connection", async (socket) => {
+  console.log("🟢 Socket connected:", socket.id);
 
   socket.on("join_live_chat", async ({ username }) => {
-    username =
-      username && username.trim().length > 1
-        ? username.trim()
-        : "anon_" + socket.id.slice(0, 6);
+    if (!username || username.trim().length < 2)
+      username = "anon_" + socket.id.slice(0, 5);
 
     socket.data.username = username;
     socket.join("live_chat");
 
-    const recent = await ChatMessage.find()
+    const history = await ChatMessage.find()
       .sort({ createdAt: -1 })
       .limit(200);
 
-    socket.emit("chat_history", recent.reverse());
+    socket.emit("chat_history", history.reverse());
   });
 
   socket.on("live_chat_message", async ({ message }) => {
@@ -79,39 +81,46 @@ io.on("connection", (socket) => {
 
     const now = Date.now();
     socket.lastMsgAt = socket.lastMsgAt || 0;
+
     if (now - socket.lastMsgAt < 400) {
       socket.emit("rate_limited");
       return;
     }
+
     socket.lastMsgAt = now;
 
-    const sanitize = require("./utils/sanitize");
-    const clean = sanitize(String(message || "").slice(0, 800));
+    const clean = String(message || "").slice(0, 800);
 
-    const m = await ChatMessage.create({
+    const msg = await ChatMessage.create({
       username: socket.data.username,
       message: clean,
       createdAt: new Date(),
     });
 
-    io.to("live_chat").emit("new_chat_message", m);
+    io.to("live_chat").emit("new_chat_message", msg);
   });
 
   socket.on("disconnect", () =>
-    console.log("❌ Socket disconnected:", socket.id)
+    console.log("🔴 Socket disconnected:", socket.id)
   );
 });
-// --------------------------------------------------------
 
-// Start hybrid mempool client and forward txs to all clients
-HybridTxClient.start((tx) => {
+// ------------------------------
+// Mempool live transactions
+// ------------------------------
+MempoolClient.start((tx) => {
   io.emit("tx", tx);
 });
 
-// ---------------------- START SERVER ----------------------
-server.listen(BACKEND_PORT, () =>
-  console.log(`🚀 Backend running on port ${BACKEND_PORT}`)
-);
+// ------------------------------
+// Start server
+// ------------------------------
+const PORT = process.env.PORT || 8080;
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log("🚀 Backend running on port", PORT);
+});
+
 
 
 

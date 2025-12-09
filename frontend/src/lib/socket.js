@@ -1,12 +1,17 @@
 import { io } from "socket.io-client";
 
+// Auto-detect Railway production URL
+const PROD_URL = window.location.origin.replace("https://", "wss://");
+
+// Local development
+const LOCAL_URL = "ws://localhost:3001";
+
+// Use env variable if exists, else auto-detect
 const BACKEND =
   import.meta.env.VITE_BACKEND_URL ||
-  window.location.origin.replace(/\/$/, "").replace("https://", "https://api."); 
-// Example: front → https://bitcoinchat.online
-// backend → https://api.bitcoinchat.online (recommended setup)
+  (window.location.hostname.includes("localhost") ? LOCAL_URL : `${PROD_URL}`);
 
-console.log("🌐 Connecting to backend:", BACKEND);
+console.log("🔌 Socket connecting to:", BACKEND);
 
 export const socket = io(BACKEND, {
   transports: ["websocket"],
@@ -14,6 +19,7 @@ export const socket = io(BACKEND, {
 });
 
 export default socket;
+
 
 
 
