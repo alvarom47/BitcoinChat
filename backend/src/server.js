@@ -1,3 +1,4 @@
+// server.js — Railway READY
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
@@ -5,50 +6,55 @@ const { Server } = require("socket.io");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-const path = require("path");
 
-// --- SERVICES & MODELS ---
 const HybridTxClient = require("./services/HybridTxClient");
 const ChatMessage = require("./models/ChatMessage");
 
-// --- ROUTES ---
 const txsRouter = require("./routes/txs");
 const postsRouter = require("./routes/posts");
 
-// --- EXPRESS APP ---
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// --- HTTP & SOCKET.IO SERVER ---
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" },
-});
-
-// --- DATABASE ---
-const MONGODB_URI =
-  process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bitcoin_live";
+// ---------- DATABASE ----------
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+  console.error("❌ ERROR: MONGODB_URI is missing");
+  process.exit(1);
+}
 
 mongoose.set("strictQuery", false);
 mongoose
   .connect(MONGODB_URI)
   .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB error:", err));
+  .catch((err) => console.error("MongoDB error", err));
 
-// --- HEALTHCHECK ---
+// ---------- API ----------
 app.get("/health", (_, res) =>
   res.json({ ok: true, time: new Date().toISOString() })
 );
 
-// --- API ROUTES ---
 app.use("/api/tx", txsRouter);
 app.use("/api/posts", postsRouter);
 
-// --- SOCKET.IO EVENTS ---
-io.on("connection", (socket) => {
-  console.log("socket connected:", socket.id);
+// ---------- SERVER ----------
+const server = http.createServer(app);
 
+// Backend must NOT use 8080 in Railway — frontend uses that port.
+const PORT = process.env.BACKEND_PORT || 3001;
+
+// ---------- SOCKET.IO ----------
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+
+io.on("connection", (socket) => {
+  console.log("socket connected", socket.id);
+
+  // Join live chat
   socket.on("join_live_chat", async ({ username }) => {
     if (!username || username.trim().length < 2)
       username = "anon_" + socket.id.slice(0, 6);
@@ -63,54 +69,36 @@ io.on("connection", (socket) => {
     socket.emit("chat_history", recent.reverse());
   });
 
+  // Receive a message
   socket.on("live_chat_message", async ({ message }) => {
     if (!socket.data.username) return;
-
-    const now = Date.now();
-    socket.lastMsgAt = socket.lastMsgAt || 0;
-
-    if (now - socket.lastMsgAt < 400) {
-      socket.emit("rate_limited");
-      return;
-    }
-
-    socket.lastMsgAt = now;
 
     const sanitize = require("./utils/sanitize");
     const clean = sanitize(String(message || "").slice(0, 800));
 
-    const msg = await ChatMessage.create({
+    const saved = await ChatMessage.create({
       username: socket.data.username,
       message: clean,
       createdAt: new Date(),
     });
 
-    io.to("live_chat").emit("new_chat_message", msg);
+    io.to("live_chat").emit("new_chat_message", saved);
   });
 
-  socket.on("disconnect", () =>
-    console.log("socket disconnected:", socket.id)
-  );
+  socket.on("disconnect", () => {
+    console.log("socket disconnected", socket.id);
+  });
 });
 
-// --- HYBRID CLIENT: TX BROADCAST ---
+// ---------- HYBRID TX STREAM ----------
 HybridTxClient.start((tx) => {
   io.emit("tx", tx);
 });
 
-// --- FRONTEND BUILD SERVING (IMPORTANT FOR RAILWAY) ---
-const distPath = path.join(__dirname, "..", "..", "frontend", "dist");
-app.use(express.static(distPath));
+// ---------- LISTEN ----------
+server.listen(PORT, "0.0.0.0", () =>
+  console.log("🚀 Backend running on port", PORT)
+);
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
-});
-
-// --- START SERVER ---
-const PORT = process.env.PORT || 8080;
-
-server.listen(PORT, () => {
-  console.log("🚀 Backend + Frontend running on port", PORT);
-});
 
 
