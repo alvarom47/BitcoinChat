@@ -1,30 +1,40 @@
-import React, {useEffect, useState} from 'react'
-import socket from '../lib/socket'
+// frontend/src/components/TxTracker.jsx
+import React, { useEffect, useState } from "react";
+import socket from "../lib/socket";
 
-export default function TxTracker(){
-  const [txs, setTxs] = useState([])
+export default function TxTracker() {
+  const [txs, setTxs] = useState([]);
 
-  useEffect(()=>{
-    socket.on('tx', (tx)=> {
-      setTxs(prev => [tx, ...prev].slice(0,200))
-    })
-    return ()=> { socket.off('tx') }
-  },[])
+  useEffect(() => {
+    console.log("📡 TxTracker mounted, listening for tx...");
+
+    socket.on("tx", (tx) => {
+      console.log("🔥 Live TX:", tx);
+
+      setTxs((prev) => [tx, ...prev].slice(0, 50)); // keep last 50
+    });
+
+    return () => {
+      socket.off("tx");
+    };
+  }, []);
 
   return (
-    <div className="card">
-      <h3>Live Transactions</h3>
-      <div className="tx-list">
-        {txs.map((t,i)=>(
-          <div key={t.txid||i} style={{padding:8,borderBottom:'1px solid rgba(255,255,255,0.02)'}}>
-            <div style={{fontWeight:700}}>{t.txid}</div>
-            <div style={{fontSize:13,color:'#9fb0c8'}}>Total: {t.totalBTC || 0} BTC — Fee: {t.feeBTC || 0} BTC</div>
-            <div style={{fontSize:13,marginTop:6}}>
-              To: {t.to && t.to.length ? t.to.slice(0,3).map(o=>o.address+' ('+o.value+')').join(', ') : '—'}
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="tx-tracker">
+      <h2>🔥 Live Bitcoin Transactions</h2>
+
+      {txs.length === 0 ? (
+        <p>No transactions yet...</p>
+      ) : (
+        <ul>
+          {txs.map((t, i) => (
+            <li key={i}>
+              <strong>TXID:</strong> {t.txid || t}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
-  )
+  );
 }
+
