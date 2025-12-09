@@ -1,15 +1,15 @@
 import { io } from "socket.io-client";
 
-// Auto-detect Railway production URL
-const PROD_URL = window.location.origin.replace("https://", "wss://");
-
 // Local development
-const LOCAL_URL = "ws://localhost:3001";
+const LOCAL_URL = "ws://localhost:8080";
 
-// Use env variable if exists, else auto-detect
+// Production (Railway auto-detect)
+const PROD_URL = window.location.origin.replace("http", "ws");
+
+// If env variable exists → use it
 const BACKEND =
   import.meta.env.VITE_BACKEND_URL ||
-  (window.location.hostname.includes("localhost") ? LOCAL_URL : `${PROD_URL}`);
+  (window.location.hostname.includes("localhost") ? LOCAL_URL : PROD_URL);
 
 console.log("🔌 Socket connecting to:", BACKEND);
 
@@ -18,7 +18,6 @@ export const socket = io(BACKEND, {
   reconnection: true,
 });
 
-export default socket;
 
 
 

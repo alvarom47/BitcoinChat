@@ -1,15 +1,17 @@
-// backend/src/server.js
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
+const path = require("path");
 const { Server } = require("socket.io");
 
+// Services
 const MempoolClient = require("./services/MempoolClient");
 const ChatMessage = require("./models/ChatMessage");
 
+// Routes
 const txsRouter = require("./routes/txs");
 const postsRouter = require("./routes/posts");
 
@@ -18,10 +20,7 @@ const server = http.createServer(app);
 
 // ------------------ SOCKET.IO ------------------
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
 // ------------------ MIDDLEWARE ------------------
@@ -32,7 +31,7 @@ app.use(bodyParser.json());
 const MONGO_URL = process.env.MONGO_URL;
 
 if (!MONGO_URL) {
-  console.error("❌ ERROR: Missing MONGO_URL environment variable");
+  console.error("❌ Missing MONGO_URL environment variable");
   process.exit(1);
 }
 
@@ -41,10 +40,12 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB error:", err));
 
-// ------------------ HEALTH CHECK ------------------
-app.get("/health", (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
+// ------------------ HEALTH ------------------
+app.get("/health", (_, res) =>
+  res.json({ ok: true, time: new Date().toISOString() })
+);
 
-// ------------------ ROUTES ------------------
+// ------------------ API ROUTES ------------------
 app.use("/api/tx", txsRouter);
 app.use("/api/posts", postsRouter);
 
@@ -52,7 +53,6 @@ app.use("/api/posts", postsRouter);
 io.on("connection", (socket) => {
   console.log("🟢 Client connected:", socket.id);
 
-  // Join chat room
   socket.on("join_live_chat", async ({ username }) => {
     if (!username || username.trim().length < 2) {
       username = "anon_" + socket.id.slice(0, 6);
@@ -61,7 +61,7 @@ io.on("connection", (socket) => {
     socket.data.username = username;
     socket.join("live_chat");
 
-    // Send last 200 messages
+    // Last 200 messages
     const recent = await ChatMessage.find()
       .sort({ createdAt: -1 })
       .limit(200);
@@ -69,22 +69,10 @@ io.on("connection", (socket) => {
     socket.emit("chat_history", recent.reverse());
   });
 
-  // Chat messages
   socket.on("live_chat_message", async ({ message }) => {
     if (!socket.data.username) return;
 
-    const now = Date.now();
-    socket.lastMsgAt = socket.lastMsgAt || 0;
-
-    if (now - socket.lastMsgAt < 400) {
-      socket.emit("rate_limited");
-      return;
-    }
-
-    socket.lastMsgAt = now;
-
-    const sanitize = require("./utils/sanitize");
-    const clean = sanitize(String(message || "").slice(0, 800));
+    const clean = String(message || "").slice(0, 800);
 
     const msg = await ChatMessage.create({
       username: socket.data.username,
@@ -96,7 +84,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("🔴 Client disconnected:", socket.id);
+    console.log("🔴 Disconnected:", socket.id);
   });
 });
 
@@ -104,11 +92,18 @@ io.on("connection", (socket) => {
 console.log("[MEMPOOL] Starting mempool live listener...");
 
 MempoolClient.start((tx) => {
-  io.emit("tx", tx); // broadcast transaction to frontend
+  io.emit("tx", tx);
+});
+
+// ------------------ SERVE FRONTEND ------------------
+app.use(express.static(path.join(__dirname, "../../frontend/dist")));
+
+app.get("*", (_, res) => {
+  res.sendFile(path.join(__dirname, "../../frontend/dist/index.html"));
 });
 
 // ------------------ START SERVER ------------------
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8080;
 
 server.listen(PORT, () => {
   console.log(`🚀 Backend running on port ${PORT}`);
