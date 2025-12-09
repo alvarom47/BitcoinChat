@@ -1,5 +1,4 @@
 // backend/src/services/MempoolClient.js
-
 const WebSocket = require("ws");
 
 let ws = null;
@@ -8,7 +7,6 @@ function start(onTx) {
   const url = "wss://mempool.space/api/v1/ws";
 
   console.log("[MEMPOOL] Connecting to mempool.space ws...");
-
   ws = new WebSocket(url);
 
   ws.on("open", () => {
@@ -19,8 +17,16 @@ function start(onTx) {
   ws.on("message", (msg) => {
     try {
       const data = JSON.parse(msg);
-      if (data["transaction"]) {
-        onTx(data["transaction"]);
+
+      // ✔ Mempool WS format
+      if (data.event === "transaction" && data.data) {
+        onTx({
+          txid: data.data.txid,
+          fee: data.data.fee,
+          value: data.data.value,
+          vsize: data.data.vsize,
+          ...data.data
+        });
       }
     } catch (err) {
       console.error("[MEMPOOL] JSON parse error:", err);
@@ -38,4 +44,5 @@ function start(onTx) {
 }
 
 module.exports = { start };
+
 
